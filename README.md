@@ -56,3 +56,8 @@ pip install -r requirements.txt
 CLI
 
 Run directly from terminal:
+python geo_task_allocator.py Excel.xlsx \
+    --k 12 \
+    --seed 42 \
+    --salida-excel asignaciones.xlsx \
+    --salida-mapa mapa.html

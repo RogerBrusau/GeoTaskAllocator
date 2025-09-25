@@ -1,4 +1,13 @@
 # app.py
+# Streamlit UI wrapper for the CLI script `agrupador_voronoi_mejorado.py`.
+# Purpose:
+# - Accept an Excel with coordinates and optional operators list.
+# - Invoke the CLI with user-selected params (k, seed).
+# - Provide downloads (Excel) and render the generated HTML map.
+# Notes:
+# - Keeps dependencies minimal; runs the core logic out of process via subprocess.
+# - Forces UTF-8 to avoid Unicode issues on Windows consoles.
+
 import streamlit as st
 import tempfile, subprocess, os
 from pathlib import Path
@@ -21,12 +30,12 @@ seed = col2.number_input("Seed", min_value=0, value=42, step=1)
 
 run_btn = st.button("Ejecutar")
 
-# Carpeta de salida
+# Output directory (created once)
 out_dir = Path("salida_ui")
 out_dir.mkdir(exist_ok=True)
 
-def save_temp(upload, suffix):
-    """Guarda upload a un archivo temporal y devuelve su ruta."""
+def save_upload_temp(upload, suffix):
+    """Persist an uploaded file to a named temporary file. Returns filesystem path."""
     tf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tf.write(upload.read())
     tf.flush()
@@ -38,24 +47,24 @@ if run_btn:
         st.error("Falta el Excel de entrada.")
         st.stop()
 
-    # Guardar entradas a disco
-    in_excel_path = save_temp(xlsx_file, ".xlsx")
+    # Persist inputs to disk for the CLI call
+    in_excel_path = save_upload_temp(xlsx_file, ".xlsx")
 
     operarios_path = None
     if operarios_upload is not None:
-        operarios_path = save_temp(operarios_upload, ".txt")
+        operarios_path = save_upload_temp(operarios_upload, ".txt")
     elif operarios_txt.strip():
         operarios_path = operarios_txt.strip()
 
-    # Salidas con timestamp para evitar caché de navegador
+    # Timestamped outputs to defeat browser cache and allow multiple runs
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     xlsx_out = out_dir / f"asignaciones_{ts}.xlsx"
     html_out = out_dir / f"mapa_{ts}.html"
 
-    # Comando CLI según tu script (no existen --input/--tight/--outdir)
+    # CLI command mapped to the script's current interface
     cmd = [
         "python", "agrupador_voronoi_mejorado.py",
-        in_excel_path,                     # argumento posicional excel_path
+        in_excel_path,                     # positional: excel_path
         "--k", str(k),
         "--seed", str(seed),
         "--salida-excel", str(xlsx_out),
@@ -64,7 +73,7 @@ if run_btn:
     if operarios_path:
         cmd.extend(["--operarios", str(operarios_path)])
 
-    # Ejecutar forzando UTF-8 para evitar UnicodeEncodeError en Windows
+    # Ensure UTF-8 to avoid UnicodeEncodeError on some Windows setups
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     res = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
@@ -75,7 +84,7 @@ if run_btn:
         st.error("El proceso devolvió un código distinto de 0. Revisa el log.")
         st.stop()
 
-    # Descargas
+    # Downloads (Excel results)
     if xlsx_out.exists():
         st.download_button(
             "Descargar asignaciones.xlsx",
@@ -85,7 +94,7 @@ if run_btn:
     else:
         st.warning("No se encontró el Excel de salida esperado.")
 
-    # Mapa
+    # Inline map rendering (HTML produced by the CLI)
     if html_out.exists():
         html = html_out.read_text(encoding="utf-8")
         st.subheader("Mapa generado")

@@ -40,7 +40,7 @@ GeoTaskAllocator/
 ├── README.md                # Project documentation
 ├── data/                    # Example anonymized inputs (optional)
 └── salida_ui/               # Auto-created output folder (maps, excels)
-
+```
 
 ---
 

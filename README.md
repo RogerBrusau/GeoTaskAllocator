@@ -31,3 +31,12 @@ It was developed to optimize the distribution of geographically dispersed assets
 ---
 
 ## 📂 Repository Structure
+
+```text
+GeoTaskAllocator/
+├── geo_task_allocator.py    # Core CLI script (balanced clustering + Voronoi map)
+├── app.py                   # Optional Streamlit interface
+├── requirements.txt         # Core dependencies (no pinned versions)
+├── README.md                # Project documentation
+├── data/                    # Example anonymized inputs (optional)
+└── salida_ui/               # Auto-created output folder (maps, excels)

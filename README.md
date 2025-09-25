@@ -40,3 +40,13 @@ GeoTaskAllocator/
 ├── README.md                # Project documentation
 ├── data/                    # Example anonymized inputs (optional)
 └── salida_ui/               # Auto-created output folder (maps, excels)
+
+
+---
+
+## 🚀 Installation
+Clone the repository and install dependencies:
+```bash
+git clone https://github.com/<your-username>/GeoTaskAllocator.git
+cd GeoTaskAllocator
+pip install -r requirements.txt

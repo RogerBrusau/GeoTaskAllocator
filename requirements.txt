@@ -1,3 +1,4 @@
+streamlit
 numpy
 pandas
 scipy
@@ -5,3 +6,4 @@ scikit-learn
 k-means-constrained
 folium
 openpyxl
+

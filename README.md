@@ -77,3 +77,44 @@ For interactive use:
 ```
 streamlit run app.py
 ```
+
+Upload the Excel file with coordinates.
+
+(Optional) upload a file with operator names.
+
+Set k and seed, then execute.
+
+Download the Excel allocation or view the generated map directly in the browser.
+
+📊 Outputs
+
+Excel file:
+
+New allocation (Agrupacion_Nueva).
+
+Suspicious or invalid coordinates (Coord_Sospechosas).
+
+Workload summary (Resumen).
+
+Interactive HTML map:
+
+Color-coded territories (Voronoi regions).
+
+Centroids per operator.
+
+Points and flags for invalid/suspicious coordinates.
+
+🎯 Applications
+
+Workforce and route planning.
+
+Service territory optimization.
+
+Resource allocation in logistics, utilities, or field operations.
+
+📷 Screenshots
+
+
+📜 License
+
+MIT License.

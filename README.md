@@ -54,10 +54,23 @@ pip install -r requirements.txt
 
 💻 Usage
 CLI
-
+```
 Run directly from terminal:
 python geo_task_allocator.py Excel.xlsx \
     --k 12 \
     --seed 42 \
     --salida-excel asignaciones.xlsx \
     --salida-mapa mapa.html
+```
+
+Options:
+
+--k: number of groups (default = number of operators or 12).
+
+--operarios: comma-separated list or path to file with operator names.
+
+--seed: random seed (default 42).
+
+Streamlit UI
+
+For interactive use:

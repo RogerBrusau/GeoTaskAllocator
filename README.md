@@ -113,7 +113,20 @@ Service territory optimization.
 Resource allocation in logistics, utilities, or field operations.
 
 📷 Screenshots
+<p align="center">
+  <img src="Captura%20de%20pantalla%202025-09-25%20124548.png" width="720"><br>
+  <em>Interactive map: territories and centroids</em>
+</p>
 
+<p align="center">
+  <img src="Captura%20de%20pantalla%202025-09-25%20124649.png" width="720"><br>
+  <em>Streamlit UI: inputs and run</em>
+</p>
+
+<p align="center">
+  <img src="Captura%20de%20pantalla%202025-09-25%20124712.png" width="720"><br>
+  <em>Output artifacts: Excel + HTML</em>
+</p>
 
 📜 License
 

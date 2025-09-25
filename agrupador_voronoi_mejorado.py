@@ -1,25 +1,11 @@
 # agrupador_voronoi_mejorado.py
-# Agrupación balanceada de ascensores en K grupos + mapa Voronoi recortado
-# - Proyección métrica local para que las distancias sean "reales" (metros aprox.)
-# - Voronoi con celdas finitas y recorte a un bounding box
-# - Parámetros de tamaño mínimo/máximo por grupo (balance suave)
-# - Lista de operarios opcional por fichero (o por CLI)
-# - Coloreado estable y leyenda
-#
-# Requiere: numpy, pandas, shapely, scipy, folium, k-means-constrained, xlsxwriter
-#
-# Uso típico:
-#   python agrupador_voronoi_mejorado.py datos.xlsx \
-#       --k 12 --operarios "A,B,C,..." \
-#       --salida-excel asignacion_balanceada.xlsx \
-#       --salida-mapa territorios_voronoi.html
-#
-# Notas:
-# - Si no pasas --k, usa la longitud de la lista de operarios.
-# - Si no pasas operarios, crea nombres "Grupo 1..K".
-# - Si el Excel trae una columna "operario" actual, se conserva en la salida.
-# - Si ves celdas Voronoi “infinitas” en tu versión de SciPy/Shapely, este script
-#   las convierte a polígonos finitos recortados al bbox del conjunto.
+# Balanced geo-clustering into K groups + finite Voronoi map.
+# Key ideas:
+# - Local metric projection for distance in meters (approx).
+# - Finite Voronoi regions clipped to a bounding box.
+# - Soft workload balance via size_min/size_max constraints.
+# - Optional operator names from CLI.
+# - Stable coloring and simple legend.
 
 import argparse
 import math
@@ -33,7 +19,7 @@ import folium
 import colorsys
 import itertools
 
-# ===================== Normalización columnas =====================
+# ===================== Column normalization =====================
 
 ALIASES = {
     "codigo":"codigo","codi":"codigo","codig":"codigo","códig":"codigo",
@@ -46,6 +32,7 @@ ALIASES = {
 }
 
 def norm_cols(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize header names to a small, consistent set."""
     def _n(s: str) -> str:
         s = s.strip().lower()
         rep=(("á","a"),("à","a"),("é","e"),("è","e"),("í","i"),("ï","i"),
@@ -55,20 +42,22 @@ def norm_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns={c: _n(c) for c in df.columns})
 
 def to_float_comma(x):
+    """Robust float parser that handles comma as decimal separator."""
     if pd.isna(x): return np.nan
     if isinstance(x, (int,float,np.integer,np.floating)): return float(x)
     s = str(x).strip()
-    if "," in s and "." in s: s = s.replace(".", "")  # separador de miles
+    if "," in s and "." in s: s = s.replace(".", "")  # thousands
     s = s.replace(",", ".")
     try: return float(s)
     except: return np.nan
 
-# ===================== Carga y limpieza =====================
+# ===================== Load and clean =====================
 
 DEFAULT_BAD_LAT = 41.3873974
 DEFAULT_BAD_LON = 2.168568
 
 def load_and_clean(path: str, bad_lat=DEFAULT_BAD_LAT, bad_lon=DEFAULT_BAD_LON) -> pd.DataFrame:
+    """Load Excel, normalize columns, parse coords, flag unusable rows."""
     df = pd.read_excel(path)
     df = norm_cols(df)
 
@@ -90,11 +79,11 @@ def load_and_clean(path: str, bad_lat=DEFAULT_BAD_LAT, bad_lon=DEFAULT_BAD_LON) 
 
     return df
 
-# ===================== Proyección a metros (equirectangular local) =====================
+# ===================== Local metric projection (meters) =====================
 
 def project_to_meters(lat, lon, lat0=None):
-    """Convierte (lat,lon) a ejes (x,y) en metros aprox. alrededor de lat0."""
-    R = 6371000.0  # radio terrestre en m
+    """Project (lat, lon) to a local equirectangular metric plane (meters approx.)."""
+    R = 6371000.0
     if lat0 is None:
         lat0 = np.nanmean(lat)
     lat_rad = np.radians(lat)
@@ -107,11 +96,11 @@ def project_to_meters(lat, lon, lat0=None):
 # ===================== Balanced K-Means =====================
 
 def balanced_clustering(df: pd.DataFrame, k: int, random_state: int = 42):
+    """Constrained K-Means on projected coordinates to balance workload sizes."""
     usable = df[df["usable"]].copy()
     if usable.empty:
         raise ValueError("No hay puntos utilizables tras la limpieza.")
 
-    # Proyectamos a metros para que 'distancia' sea más realista
     x, y, lat0 = project_to_meters(usable["lat"].to_numpy(), usable["lon"].to_numpy())
     XY = np.column_stack([x,y])
     n = len(usable)
@@ -130,11 +119,10 @@ def balanced_clustering(df: pd.DataFrame, k: int, random_state: int = 42):
     df["cluster_id"] = np.nan
     df.loc[usable.index, "cluster_id"] = labels
 
-    # centroides en la proyección
+    # Centroids in projected plane
     cent_xy = np.vstack([XY[labels==c].mean(axis=0) for c in range(k)])
 
-    # Desproyección aproximada a (lat,lon) para pintar
-    # Inversa de la equirectangular local (tomamos lon/lat medios del conjunto)
+    # Approximate inverse projection back to (lat, lon) for display
     lat_mean = float(np.nanmean(usable["lat"]))
     lon_mean = float(np.nanmean(usable["lon"]))
     R = 6371000.0
@@ -146,13 +134,12 @@ def balanced_clustering(df: pd.DataFrame, k: int, random_state: int = 42):
 
     return df, centroids
 
-# ===================== Voronoi finito =====================
+# ===================== Finite Voronoi =====================
 
 def voronoi_finite_polygons_2d(vor, radius=1e6):
     """
-    A partir de un Voronoi 2D (scipy) crea regiones poligonales finitas.
-    Devuelve (regiones, vertices) donde regiones es una lista de listas de índices.
-    Código adaptado de SciPy Cookbook.
+    Build finite polygons from a 2D Voronoi diagram.
+    Returns (regions, vertices). Adapted from SciPy Cookbook.
     """
     if vor.points.shape[1] != 2:
         raise ValueError("Solo 2D soportado.")
@@ -173,7 +160,7 @@ def voronoi_finite_polygons_2d(vor, radius=1e6):
             new_regions.append(vertices)
             continue
 
-        # Reconstruye región infinita
+        # Reconstruct infinite region
         ridges = vor.ridge_vertices
         ridge_points = vor.ridge_points
         new_region = [v for v in vertices if v >= 0]
@@ -184,10 +171,9 @@ def voronoi_finite_polygons_2d(vor, radius=1e6):
             if v1 >= 0 and v2 >= 0:
                 continue
 
-            # Punto medio y dirección
             t = vor.points[p2] - vor.points[p1]
             t /= np.linalg.norm(t)
-            n = np.array([-t[1], t[0]])  # normal
+            n = np.array([-t[1], t[0]])  # outward normal
 
             midpoint = vor.points[[p1, p2]].mean(axis=0)
             direction = np.sign(np.dot(midpoint - center, n)) * n
@@ -205,6 +191,7 @@ def voronoi_finite_polygons_2d(vor, radius=1e6):
     return new_regions, np.asarray(new_vertices)
 
 def make_bbox(lats, lons, expand=0.02):
+    """Build a padded geographic bounding box polygon."""
     minx,maxx=float(np.nanmin(lons)),float(np.nanmax(lons))
     miny,maxy=float(np.nanmin(lats)),float(np.nanmax(lats))
     dx,dy=(maxx-minx),(maxy-miny)
@@ -215,6 +202,7 @@ def make_bbox(lats, lons, expand=0.02):
     ])
 
 def voronoi_polys_finite(centroids, bbox_poly):
+    """Compute finite Voronoi cells and clip them to the bbox."""
     pts = np.column_stack([centroids[:,1], centroids[:,0]])  # (lon,lat)
     vor = Voronoi(pts)
     regions, vertices = voronoi_finite_polygons_2d(vor)
@@ -227,10 +215,10 @@ def voronoi_polys_finite(centroids, bbox_poly):
         polys.append(poly)
     return polys
 
-# ===================== Colores =====================
+# ===================== Colors =====================
 
 def stable_colors(n, s=0.55, v=0.95):
-    """Genera n colores distintos (hex) distribuidos en el círculo HSV."""
+    """Generate n distinct hex colors spaced around HSV hue circle."""
     hues = np.linspace(0, 1, n, endpoint=False)
     cols = []
     for h in hues:
@@ -238,9 +226,10 @@ def stable_colors(n, s=0.55, v=0.95):
         cols.append("#%02x%02x%02x" % (int(r*255), int(g*255), int(b*255)))
     return cols
 
-# ===================== Mapa =====================
+# ===================== Map =====================
 
 def build_map(df, centroids, grupos, html_out):
+    """Render Voronoi polygons and points into a Folium map."""
     dfu = df[df["usable"]]
     m = folium.Map(location=[dfu["lat"].mean(), dfu["lon"].mean()], zoom_start=12)
 
@@ -250,7 +239,7 @@ def build_map(df, centroids, grupos, html_out):
     bbox = make_bbox(df["lat"].values, df["lon"].values, expand=0.03)
     polys = voronoi_polys_finite(centroids, bbox)
 
-    # polígonos Voronoi
+    # Voronoi polygons
     for cid, poly in enumerate(polys):
         if poly.is_empty: 
             continue
@@ -261,7 +250,7 @@ def build_map(df, centroids, grupos, html_out):
                        fill=True, fill_opacity=0.15, weight=2,
                        popup=f"Zona {grupos[cid]}").add_to(m)
 
-    # puntos válidos
+    # Valid points
     for _, r in dfu.iterrows():
         g = r["grupo_nuevo"]
         col = color_by_group.get(g, "#666666")
@@ -269,18 +258,18 @@ def build_map(df, centroids, grupos, html_out):
                             color=col, fill=True, fill_color=col,
                             popup=f"{g} · Código: {r.get('codigo','')}").add_to(m)
 
-    # sospechosos en rojo
+    # Suspicious coords
     for _, r in df[df["coord_sospechosa"]].iterrows():
         folium.CircleMarker([r["lat"],r["lon"]], radius=4,
                             color="#ff0000", fill=True, fill_color="#ff0000",
                             popup="COORD SOSPECHOSA").add_to(m)
 
-    # centroides
+    # Centroids
     for cid,(la,lo) in enumerate(centroids):
         folium.Marker([la,lo], tooltip=f"{grupos[cid]}",
                       icon=folium.Icon(icon="wrench", prefix="fa")).add_to(m)
 
-    # Leyenda simple
+    # Simple legend
     legend_html = """<div style="position: fixed; 
                                  bottom: 20px; left: 20px; width: 260px; 
                                  z-index:9999; font-size:12px; 
@@ -307,7 +296,7 @@ def main():
     ap.add_argument("--seed", type=int, default=42, help="Semilla aleatoria para reproducibilidad.")
     args = ap.parse_args()
 
-    # Nombres de grupos
+    # Group names
     grupos = [s.strip() for s in args.operarios.split(",") if s.strip()]
     if args.k is None:
         if grupos:
@@ -325,12 +314,12 @@ def main():
     df = load_and_clean(args.excel_path, args.bad_lat, args.bad_lon)
     df_out, centroids = balanced_clustering(df, k=k, random_state=args.seed)
 
-    # Asignamos nombres de grupo en función del cluster_id
+    # Map cluster_id → group label
     df_out["grupo_nuevo"] = df_out["cluster_id"].apply(
         lambda v: grupos[int(v)] if pd.notna(v) and int(v)<len(grupos) else ""
     )
 
-    # Resumen tamaños
+    # Size summary
     sizes = (df_out[df_out["usable"]]
              .groupby("grupo_nuevo")
              .size()
@@ -338,7 +327,7 @@ def main():
              .reset_index()
              .sort_values("total", ascending=False))
 
-    # Guardar Excel
+    # Save Excel
     with pd.ExcelWriter(args.salida_excel, engine="xlsxwriter") as w:
         df_out.to_excel(w, index=False, sheet_name="Agrupacion_Nueva")
         df_out[df_out["coord_sospechosa"]].to_excel(w, index=False, sheet_name="Coord_Sospechosas")

@@ -74,3 +74,6 @@ Options:
 Streamlit UI
 
 For interactive use:
+```
+streamlit run app.py
+```

@@ -50,3 +50,9 @@ Clone the repository and install dependencies:
 git clone https://github.com/<your-username>/GeoTaskAllocator.git
 cd GeoTaskAllocator
 pip install -r requirements.txt
+
+
+💻 Usage
+CLI
+
+Run directly from terminal:
